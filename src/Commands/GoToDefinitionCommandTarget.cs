@@ -81,61 +81,69 @@ namespace HtmlTools
         {
             string root = ProjectHelpers.GetProjectFolder(TextView.TextBuffer.GetFileName());
             position = -1;
+            string global_root = root;// for accessing the root path because root variable value changes in a foreach statement
+
             bool isLow = false, isMedium = false;
             string result = null;
 
             foreach (string ext in extensions)
             {
                 ICssParser parser = CssParserLocator.FindComponent(ProjectHelpers.GetContentType(ext.Trim('.'))).CreateParser();
-
-                foreach (string file in Directory.EnumerateFiles(root, "*" + ext, SearchOption.AllDirectories))
+                foreach (string directory in Directory.EnumerateDirectories(global_root, "*", SearchOption.TopDirectoryOnly))
                 {
-                    if (file.EndsWith(".min" + ext, StringComparison.OrdinalIgnoreCase) ||
-                        file.Contains("node_modules") ||
-                        file.Contains("bower_components"))
+                    if (directory != global_root + "obj" && directory != global_root + "bin")
                     {
-                        continue;
-                    }
+                        root = directory;
+                        foreach (string file in Directory.EnumerateFiles(root, "*" + ext, SearchOption.AllDirectories))
+                        {
+                            if (file.EndsWith(".min" + ext, StringComparison.OrdinalIgnoreCase) ||
+                                file.Contains("node_modules") ||
+                                file.Contains("bower_components"))
+                            {
+                                continue;
+                            }
 
-                    string text = File.ReadAllText(file);
-                    int index = text.IndexOf("." + _className, StringComparison.Ordinal);
+                            string text = File.ReadAllText(file);
+                            int index = text.IndexOf("." + _className, StringComparison.Ordinal);
 
-                    if (index == -1)
-                    {
-                        continue;
-                    }
+                            if (index == -1)
+                            {
+                                continue;
+                            }
 
-                    Microsoft.WebTools.Languages.Css.TreeItems.StyleSheet css = parser.Parse(text, true);
-                    var visitor = new CssItemCollector<ClassSelector>(false);
-                    css.Accept(visitor);
+                            Microsoft.WebTools.Languages.Css.TreeItems.StyleSheet css = parser.Parse(text, true);
+                            var visitor = new CssItemCollector<ClassSelector>(false);
+                            css.Accept(visitor);
 
-                    IEnumerable<ClassSelector> selectors = visitor.Items.Where(c => c.ClassName.Text == _className);
-                    ClassSelector high = selectors.FirstOrDefault(c => c.FindType<AtDirective>() == null && (c.Parent.NextSibling == null || c.Parent.NextSibling.Text == ","));
+                            IEnumerable<ClassSelector> selectors = visitor.Items.Where(c => c.ClassName.Text == _className);
+                            ClassSelector high = selectors.FirstOrDefault(c => c.FindType<AtDirective>() == null && (c.Parent.NextSibling == null || c.Parent.NextSibling.Text == ","));
 
-                    if (high != null)
-                    {
-                        position = high.Start;
-                        return file;
-                    }
+                            if (high != null)
+                            {
+                                position = high.Start;
+                                return file;
+                            }
 
-                    ClassSelector medium = selectors.FirstOrDefault(c => c.Parent.NextSibling == null || c.Parent.NextSibling.Text == ",");
+                            ClassSelector medium = selectors.FirstOrDefault(c => c.Parent.NextSibling == null || c.Parent.NextSibling.Text == ",");
 
-                    if (medium != null && !isMedium)
-                    {
-                        position = medium.Start;
-                        result = file;
-                        isMedium = true;
-                        continue;
-                    }
+                            if (medium != null && !isMedium)
+                            {
+                                position = medium.Start;
+                                result = file;
+                                isMedium = true;
+                                continue;
+                            }
 
-                    ClassSelector low = selectors.FirstOrDefault();
+                            ClassSelector low = selectors.FirstOrDefault();
 
-                    if (low != null && !isMedium && !isLow)
-                    {
-                        position = low.Start;
-                        result = file;
-                        isLow = true;
-                        continue;
+                            if (low != null && !isMedium && !isLow)
+                            {
+                                position = low.Start;
+                                result = file;
+                                isLow = true;
+                                continue;
+                            }
+                        }
                     }
                 }
             }
